@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://polska-auto-leads-engine-max-b1fmoq.fly.dev/$1"
+    },
+    { "source": "/(.*)", "destination": "/" }
+  ],
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install"
+}
