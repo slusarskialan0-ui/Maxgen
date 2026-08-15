@@ -1,0 +1,47 @@
+name: Deploy Frontend to Vercel
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Trigger Vercel deploy
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
+    steps:
+      - name: Trigger deployment hook
+        run: |
+          set -euo pipefail
+          curl -fsSL -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
+
+      - name: Verify frontend and PWA
+        if: ${{ secrets.FRONTEND_HEALTHCHECK_URL != '' }}
+        run: |
+          set -euo pipefail
+          BASE="${{ secrets.FRONTEND_HEALTHCHECK_URL }}"
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsSL "$BASE" > /tmp/frontend-index.html; then
+              if curl -fsSL "$BASE/manifest.json" > /tmp/frontend-manifest.json && curl -fsSL "$BASE/sw.js" > /tmp/frontend-sw.js; then
+                ok=1
+                break
+              fi
+            fi
+            sleep 10
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "Frontend health check failed"
+            exit 1
+          fi
+
+      - name: Trigger rollback hook on failure
+        if: ${{ failure() && secrets.VERCEL_ROLLBACK_HOOK_URL != '' }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -X POST "${{ secrets.VERCEL_ROLLBACK_HOOK_URL }}"

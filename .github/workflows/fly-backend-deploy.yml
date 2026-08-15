@@ -1,0 +1,74 @@
+name: Deploy Backend to Fly.io
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    if: secrets.FLY_API_TOKEN != ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify backend readiness
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP="$(sed -n "s/^app = ['\"]\\(.*\\)['\"]$/\\1/p" fly.toml | head -n1)"
+          URL="$(flyctl status --app "$APP" --json | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('Hostname',''))")"
+          if [ -z "$URL" ]; then
+            echo "Cannot resolve Fly hostname"
+            exit 1
+          fi
+          READY_URL="https://$URL/system/readiness"
+          echo "Readiness URL: $READY_URL"
+          ok=0
+          for i in $(seq 1 30); do
+            code="$(curl -s -o /tmp/fly-ready.json -w '%{http_code}' "$READY_URL" || true)"
+            if [ "$code" = "200" ] && grep -q '"ready": true' /tmp/fly-ready.json; then
+              ok=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "Readiness check failed"
+            exit 1
+          fi
+
+      - name: Rollback on failed readiness
+        if: failure()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP="$(sed -n "s/^app = ['\"]\\(.*\\)['\"]$/\\1/p" fly.toml | head -n1)"
+          flyctl releases --app "$APP" --json > /tmp/fly-releases.json
+          PREV_VERSION="$(python - <<'PY'
+import json
+with open('/tmp/fly-releases.json','r',encoding='utf-8') as f:
+    rows = json.load(f)
+stable = [r for r in rows if r.get('Status') == 'complete']
+print(stable[1]['Version'] if len(stable) > 1 else '')
+PY
+)"
+          if [ -n "$PREV_VERSION" ]; then
+            flyctl releases rollback "$PREV_VERSION" --app "$APP" --yes
+          else
+            echo "No previous stable release found for rollback"
+          fi
