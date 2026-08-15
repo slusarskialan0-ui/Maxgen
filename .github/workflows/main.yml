@@ -1,1 +1,20 @@
+# This workflow is intentionally left minimal.
+# Primary CI/CD is handled by ci.yml (tests) and deploy.yml (deployment).
+# Kept for compatibility with branch protection rules that reference main.yml.
 
+name: Main
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  status:
+    name: Main workflow status
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: OK
+        run: echo "Main workflow OK — see ci.yml for full CI pipeline"
