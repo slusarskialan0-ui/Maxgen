@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      AUTO_BACKUP_DIR: /app/runtime_backups
+      DATABASE_URL: sqlite:////app/data/polska_leads.db
+      CORS_ORIGINS: http://localhost:3000
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_data:/app/data
+      - ./backend/runtime_backups:/app/runtime_backups
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  backend_data:
