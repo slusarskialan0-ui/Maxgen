@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: polska-auto-leads-backend
+    runtime: python
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # set manually in Render dashboard
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: B2B_LEAD_SCORE_THRESHOLD
+        value: "65"
+      - key: CORS_ORIGINS
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
